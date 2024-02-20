@@ -14,9 +14,9 @@ import (
 )
 
 type Cliente struct {
-	Id            int `json:"id "`
-	Limite        int `json:"limite"`
-	Saldo_inicial int `json:"saldo_inicial"`
+	Id     int `json:"id "`
+	Limite int `json:"limite"`
+	Saldo  int `json:"saldo"`
 }
 
 type Teste struct {
@@ -61,7 +61,7 @@ func main() {
 	}
 	defer db.Close()
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS cliente(id int, limite int, saldo_inicial int);")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS cliente(id int, limite int, saldo int);")
 
 	if err != nil {
 		log.Fatal(err)
@@ -90,7 +90,7 @@ func ExtratosHandler(db *sql.DB) http.HandlerFunc {
 			log.Fatal(err)
 		}
 
-		rows, err := db.Query(`select cl.saldo_inicial as total, cl.limite, ut.valor, ut.tipo, ut.descricao, ut.realizada_em from cliente cl inner join ultimas_transacoes ut on cl.id =$1`, id)
+		rows, err := db.Query(`select cl.saldo as total, cl.limite, ut.valor, ut.tipo, ut.descricao, ut.realizada_em from cliente cl inner join ultimas_transacoes ut on cl.id =$1`, id)
 
 		if err != nil {
 			log.Fatal(err)
@@ -148,7 +148,7 @@ func TransactionsHandler(db *sql.DB) http.HandlerFunc {
 		defer rows.Close()
 		var cliente Cliente
 		for rows.Next() {
-			err := rows.Scan(&cliente.Id, &cliente.Limite, &cliente.Saldo_inicial)
+			err := rows.Scan(&cliente.Id, &cliente.Limite, &cliente.Saldo)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -166,12 +166,12 @@ func TransactionsHandler(db *sql.DB) http.HandlerFunc {
 		// DoTransaction(transaction, cliente)
 
 		if transaction.Tipo == "c" {
-			novo_saldo := cliente.Saldo_inicial + transaction.Valor
+			novo_saldo := cliente.Saldo + transaction.Valor
 
 			resp := Response{Limite: cliente.Limite, Saldo: novo_saldo}
-			fmt.Println(novo_saldo, cliente.Saldo_inicial, transaction.Valor)
+			fmt.Println(novo_saldo, cliente.Saldo, transaction.Valor)
 
-			db.Exec(`UPDATE cliente SET saldo_inicial = $1 WHERE id=$2`, novo_saldo, cliente.Id)
+			db.Exec(`UPDATE cliente SET saldo = $1 WHERE id=$2`, novo_saldo, cliente.Id)
 			_, err := db.Exec(`INSERT INTO ultimas_transacoes (tipo, descricao, realizada_em, id_cliente, valor) VALUES 
 			($1, $2, $3, $4, $5)
 			`, transaction.Tipo, transaction.Descricao, time.Now().UTC(), cliente.Id, transaction.Valor)
@@ -187,18 +187,18 @@ func TransactionsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		} else if transaction.Tipo == "d" {
 
-			if (cliente.Saldo_inicial - transaction.Valor) < -cliente.Limite {
+			if (cliente.Saldo - transaction.Valor) < -cliente.Limite {
 				//throw error
 				w.WriteHeader(http.StatusUnprocessableEntity)
 				return
 			} else {
 				//saldo ok
-				novo_saldo := cliente.Saldo_inicial - transaction.Valor
+				novo_saldo := cliente.Saldo - transaction.Valor
 
 				resp := Response{Limite: cliente.Limite, Saldo: novo_saldo}
-				fmt.Println(novo_saldo, cliente.Saldo_inicial, transaction.Valor)
+				fmt.Println(novo_saldo, cliente.Saldo, transaction.Valor)
 
-				db.Exec(`UPDATE cliente SET saldo_inicial = $1 WHERE id=$2`, novo_saldo, cliente.Id)
+				db.Exec(`UPDATE cliente SET saldo = $1 WHERE id=$2`, novo_saldo, cliente.Id)
 				_, err := db.Exec(`INSERT INTO ultimas_transacoes (tipo, descricao, realizada_em, id_cliente, valor) VALUES 
 			($1, $2, $3, $4, $5)
 			`, transaction.Tipo, transaction.Descricao, time.Now().UTC(), cliente.Id, transaction.Valor)
@@ -217,46 +217,8 @@ func TransactionsHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusInternalServerError)
-		// resp := Teste{id, "daniel"}
 
 	}
-}
-
-func DoTransaction(t Transaction, cliente Cliente) {
-	if t.Tipo == "c" {
-		fmt.Println("crédito", t, cliente)
-
-		// novo_saldo := cliente.Saldo_inicial + t.Valor
-
-		return
-
-		//credito
-		/*
-			novo saldo = saldo + t.valor
-
-
-			retorna {
-				limite,
-				novo saldo
-
-				status 200
-			}
-
-		*/
-	} else if t.Tipo == "d" {
-		//debito
-
-		/*
-			novo saldo = saldo - t.valor
-
-			se novo saldo < limite ->> erro status 422 e rollback
-
-		*/
-
-	} else {
-		//throw erro de tipo invalido
-	}
-
 }
 
 func createCliente(db *sql.DB) http.HandlerFunc {
@@ -268,7 +230,7 @@ func createCliente(db *sql.DB) http.HandlerFunc {
 			log.Fatal(err)
 		}
 
-		_, err = db.Exec("INSERT INTO cliente (id, limite, saldo_inicial) VALUES ($1, $2, $3)", cliente.Id, cliente.Limite, cliente.Saldo_inicial)
+		_, err = db.Exec("INSERT INTO cliente (id, limite, saldo) VALUES ($1, $2, $3)", cliente.Id, cliente.Limite, cliente.Saldo)
 		if err != nil {
 			log.Fatal(err)
 		}
