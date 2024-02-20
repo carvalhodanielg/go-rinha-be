@@ -172,19 +172,48 @@ func TransactionsHandler(db *sql.DB) http.HandlerFunc {
 			fmt.Println(novo_saldo, cliente.Saldo_inicial, transaction.Valor)
 
 			db.Exec(`UPDATE cliente SET saldo_inicial = $1 WHERE id=$2`, novo_saldo, cliente.Id)
-			result, err := db.Exec(`INSERT INTO ultimas_transacoes (tipo, descricao, realizada_em, id_cliente, valor) VALUES 
+			_, err := db.Exec(`INSERT INTO ultimas_transacoes (tipo, descricao, realizada_em, id_cliente, valor) VALUES 
 			($1, $2, $3, $4, $5)
 			`, transaction.Tipo, transaction.Descricao, time.Now().UTC(), cliente.Id, transaction.Valor)
 
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println(result)
+			// fmt.Println("tipo c -> result: %d", result)
 
 			w.WriteHeader(http.StatusOK)
 
 			json.NewEncoder(w).Encode(resp)
 			return
+		} else if transaction.Tipo == "d" {
+
+			if (cliente.Saldo_inicial - transaction.Valor) < -cliente.Limite {
+				//throw error
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				return
+			} else {
+				//saldo ok
+				novo_saldo := cliente.Saldo_inicial - transaction.Valor
+
+				resp := Response{Limite: cliente.Limite, Saldo: novo_saldo}
+				fmt.Println(novo_saldo, cliente.Saldo_inicial, transaction.Valor)
+
+				db.Exec(`UPDATE cliente SET saldo_inicial = $1 WHERE id=$2`, novo_saldo, cliente.Id)
+				_, err := db.Exec(`INSERT INTO ultimas_transacoes (tipo, descricao, realizada_em, id_cliente, valor) VALUES 
+			($1, $2, $3, $4, $5)
+			`, transaction.Tipo, transaction.Descricao, time.Now().UTC(), cliente.Id, transaction.Valor)
+
+				if err != nil {
+					log.Fatal(err)
+				}
+				// fmt.Println("tipo c -> result: %d", result)
+
+				w.WriteHeader(http.StatusOK)
+
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+
 		}
 
 		w.WriteHeader(http.StatusInternalServerError)
